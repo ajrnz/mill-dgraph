@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+<meta charset="utf-8">
+
+<head>
+  <link rel="stylesheet" type="text/css" href="DepInfo.css">
+
+  <script src="https://d3js.org/d3.v4.js"></script>
+  <script src="https://dagrejs.github.io/project/graphlib-dot/v0.6.3/graphlib-dot.js"></script>
+  <script src="dagre-d3.js"></script>
+  <script src="DepData.js"></script>
+
+  <title id="title"></title>
+</head>
+
+<body onLoad="setup();">
+
+<div class="title-block">
+  <div id="header"></div>
+  <div id="selectionInfo"></div>
+
+  <div id="rightBox">
+    <table>
+      <tr>
+        <td valign="top">
+          <div id="evictCheckBox">
+            <label><input type="checkbox" checked="true" onChange="toggleEvicted(event)">Show evicted</label>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td valign="bottom">
+          <div>
+            <table id="sizeTable">
+              <tr><td>Total Jar</td><td id="jarTotal"></td></tr>
+              <tr><td>Total Src</td><td id="srcTotal"></td></tr>
+            </table>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<div id="svgDiv">
+<svg width="100%" height=1>
+  <g/>
+</svg>
+<div>
+
+<script>
+
+// Set up zoom support
+var svg = d3.select("svg"),
+    inner = d3.select("svg g"),
+    zoom = d3.zoom().on("zoom", function() {
+      inner.attr("transform", d3.event.transform);
+    });
+svg.call(zoom);
+
+
+function nodeName(node) {
+  return node.key
+}
+function nodeLabel(node) {
+  return node.org + "\n" + node.name + "\n" + node.version
+}
+
+// Create and configure the renderer
+var render = dagreD3.render();
+var g;
+
+var selectionInfo = document.getElementById("selectionInfo")
+
+
+selectedNode = null
+
+
+function setSelection(nodeId) {
+  //console.log('setSelection', nodeId)
+  cancelSelection()
+  selectedNode = nodeId
+  highlightNode(selectedNode, true)
+}
+
+function cancelSelection() {
+  if (selectedNode) {
+    highlightNode(selectedNode, false)
+    selectedNode = null
+  }
+}
+
+function successors(id) { return g.successors(id) }
+function predecessors(id) { return g.predecessors(id) }
+function outEdges(id) { return g.outEdges(id) }
+function inEdges(id) { return g.inEdges(id) }
+function addClass(clazz)    { return function(elem) { elem.classList.add(clazz) }}
+function removeClass(clazz) { return function(elem) { elem.classList.remove(clazz) }}
+
+function highlightNode(nodeId, highlight) {
+  var mod = highlight ? addClass : removeClass
+  var node = g.node(nodeId)
+  mod("selected-node")(node.elem)
+  highlightRecursively(nodeId, successors,   mod("successor"),   outEdges, mod("out-edge-highlight"))
+  highlightRecursively(nodeId, predecessors, mod("predecessor"), inEdges,  mod("in-edge-highlight"))
+}
+
+function highlightRecursively(itemId, nextNodes, nodeMod, edgeSelect, edgeMod) {
+  //console.log("itemId", itemId)
+  var node = g.node(itemId)
+
+  // the node
+  nodeMod(node.elem)  
+  
+  // the edges
+ edgeSelect(itemId).forEach(function(e) {
+    edgeMod(g.edge(e).elem)
+  }) 
+
+  nextNodes(itemId)
+    .forEach(function(id){ highlightRecursively(id, nextNodes, nodeMod, edgeSelect, edgeMod) })
+}
+
+function setup() {
+  document.getElementById("title").innerText = depData.title
+  document.getElementById("header").innerText = depData.title
+
+  document.getElementById("jarTotal").innerText = depData.jarTotal
+  document.getElementById("srcTotal").innerText = depData.srcTotal
+
+  drawDepGraph(true)
+}
+
+function drawDepGraph(showEvicted) {  
+  var deps = depData.depsWithoutEvictions
+  if (showEvicted) { deps = depData.depsWithEvictions }
+
+  g = new dagreD3.graphlib.Graph().setGraph({"rankdir": "LR"});
+  for(var nodeId in deps.nodes) {
+    var node = deps.nodes[nodeId]
+    var fill = (node.evicted ? "fill: gray;" : "fill: black;") + (node.isProject ? "font-weight: bold;" : "")
+    var lineStyle = node.evicted ? "stroke-dasharray: 5, 5;" : (node.isProject ? "stroke-width: 5px;" : "")    
+    g.setNode(node.key, {label: nodeLabel(node), labelStyle: fill, style: lineStyle, rx: 5, ry: 5, description: "description: "+node.key})
+  }
+  deps.edges.forEach(function(edge){
+    var lineStyle = edge.eviction ? "stroke-dasharray: 5, 5;" : ""
+    g.setEdge(edge.from, edge.to, {label: "", style: "fill: none;"+lineStyle})
+  })
+
+
+  // Render the graph into svg g
+  render(inner,g)
+  //inner.call(render, g);
+
+  var svgDiv = document.getElementById("svgDiv")
+  var svg2 = document.querySelector("svg")
+  
+  var width = svgDiv.offsetWidth
+  var height = svgDiv.offsetHeight
+  svg2.setAttribute('height', height)
+  
+  var scale = height / g.graph().height * 0.95
+  var xoff = (width-g.graph().width*scale)/2
+  svg.call(zoom.transform, d3.zoomIdentity.translate(xoff,20).scale(scale, scale));
+
+  var currentNodeInfo = ""
+
+  g.nodes().forEach(function(id) {
+    var elem = g.node(id).elem
+    elem.onclick = function(e){ 
+      clickNode(id, e)      
+    }
+    elem.onmouseenter = function(e) { 
+      setNodeInfo(deps.nodes[id].info)
+    }
+    elem.onmouseleave = function(e) { 
+      setNodeInfo(currentNodeInfo)
+    }
+  })
+
+  document.querySelector("svg").onclick = function(e) { 
+    cancelSelection()
+    setNodeInfo(null)
+    currentNodeInfo = ""
+  }
+
+  function setNodeInfo(info) {
+    selectionInfo.innerHTML = info
+  }
+
+  function clickNode(nodeId, e) {
+    setSelection(nodeId)
+    currentNodeInfo = deps.nodes[nodeId].info
+    setNodeInfo(currentNodeInfo)
+    e.stopPropagation()
+  }
+
+}
+
+function toggleEvicted(event) {
+  drawDepGraph(event.target.checked)
+}
+
+</script>
+</body>
+</html>
