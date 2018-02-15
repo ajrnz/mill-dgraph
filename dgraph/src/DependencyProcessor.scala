@@ -18,31 +18,30 @@ object DependencyProcessor {
   val validType = Set("jar", "bundle", "src")
 
   sealed trait DepWrapper {
-    def isProject: Boolean = false
     def depKey: String
+    def lines: (String, String, String)
+    def typ: String
   }
   case class GenericDependency(dep: Dependency) extends DepWrapper {
+    def typ = "dep"
     override def depKey: String = s"${dep.module.organization}:${dep.module.name}:${dep.version}"
+    def lines = (dep.module.organization, dep.module.name, dep.version)
   }
 
   case class ProjectDep(module: ScalaModule) extends DepWrapper {
-    override def isProject: Boolean = true
-    override def depKey: String = module.toString // XXX .name
+    def typ = "prj"
+    override def depKey = name
+    def name = module.toString // XXX .name
+    def lines = (name, "", "")
   }
 
-  class RefProjectDep(module: ScalaModule) extends ProjectDep(module) {
+  case class RefProjectDep(module: ScalaModule) extends DepWrapper {
+    override def typ = "ref"
+    override def depKey = name
+    def name = module.toString // XXX .name
+    override def lines = (name, "(reference)", "")
   }
 
-
-  def projectDep(module: ScalaModule): Dependency = Dependency(Module("", module.toString), "")
-  def isProject(dep: Dependency) = dep.module.organization == "" && dep.version == ""
-
-  def depKey(dep: Dependency) = {
-    if (isProject(dep))
-      dep.module.name
-    else
-      s"${dep.module.organization}:${dep.module.name}:${dep.version}"
-  }
 
   def toDependency(dep: Dep, scalaVersion: String, platformSuffix: String): Dependency =
     dep match {
@@ -85,7 +84,7 @@ case class ArtifactInfo(link: String, file: String, size: Long, sizeStr: String)
 sealed trait GraphElement
 case class DepNode(key: String, org: String, name: String, version: String,
                    artifacts: Map[String, ArtifactInfo],
-                   isProject: Boolean, info: String, evicted: Boolean) extends GraphElement
+                   nodeType: String, info: String, evicted: Boolean) extends GraphElement
 case class DepEdge(from: String, to: String, eviction: Boolean) extends GraphElement
 case class Results(nodes: Map[String, DepNode], edges: Seq[DepEdge], jarTotal: Long, srcTotal: Long)
 
@@ -97,8 +96,8 @@ object GraphElement { implicit def rw: ReadWriter[GraphElement] = macroRW }
 object Results {      implicit def rw: ReadWriter[Results] = macroRW }
 
 
-class DependencyProcessor(moduleGraph: Seq[(ScalaModule,ScalaModule)],
-                          depMap: Map[ScalaModule,Agg[Dep]],
+class DependencyProcessor(moduleGraph: Seq[(DepWrapper,DepWrapper)],
+                          depMap: Map[DepWrapper,Agg[Dep]],
                           repos: Seq[Repository], scalaVersion: String, platformSuffix: String)
 {
   val allModules = moduleGraph.flatMap(x => Seq(x._1, x._2)).distinct
@@ -126,7 +125,7 @@ class DependencyProcessor(moduleGraph: Seq[(ScalaModule,ScalaModule)],
     val artifacts =
       Task.gatherUnordered(artifactList.map { case (dep, art) =>
         Cache.file(art).map(file =>
-          Map(depKey(dep) ->
+          Map(GenericDependency(dep).depKey ->
             Map(simpleType(art.attributes.`type`) ->
               ArtifactInfo(file.getAbsolutePath, file.getName, file.length, dataSize(file.length))))
         ).run
@@ -146,20 +145,21 @@ class DependencyProcessor(moduleGraph: Seq[(ScalaModule,ScalaModule)],
 //    artifactMap.foreach(println)
 
 
-    def artifactInfo(dep: Dependency, artInfo: Map[String, ArtifactInfo], evicted: Boolean): String = {
+    def artifactInfo(dep: DepWrapper, artInfo: Map[String, ArtifactInfo], evicted: Boolean): String = {
       val arts = artInfo.keys.toList.sorted.map { classifier =>
         val art = artInfo(classifier)
         tr(td(classifier.capitalize), td(a(href := art.link, s"${art.file} (${art.sizeStr})")))
       }
 
-      if (isProject(dep)) {
-        List(
-          table(
-            tr(td("Project"), td(dep.module.name))
-          )
-        ).render
-      }
-      else {
+      dep match {
+        case pd: ProjectDep =>
+          List(
+            table(
+              tr(td("Project"), td(pd.depKey))
+            )
+          ).render
+
+      case GenericDependency(dep) =>
         List(
           table(
             tr(td("Name"), td(dep.module.name + (if (evicted) " (evicted)" else ""))),
@@ -168,16 +168,23 @@ class DependencyProcessor(moduleGraph: Seq[(ScalaModule,ScalaModule)],
             arts
           )
         ).render
+
+      case rpd: RefProjectDep =>
+        List(
+          table(
+            tr(td("Name"), td(rpd.depKey + " (reference project)"))
+          )
+        ).render
       }
     }
 
-    def toDepNode(dep: Dependency, evicted: Boolean = false) = {
-      val arts = artifactMap.getOrElse(depKey(dep), Map.empty)
+    def toDepNode(dep: DepWrapper, evicted: Boolean = false) = {
+      val arts = artifactMap.getOrElse(dep.depKey, Map.empty)
       val info = artifactInfo(dep, arts, evicted)
-      DepNode(depKey(dep), dep.module.organization, dep.module.name, dep.version, arts, isProject(dep), info, evicted = evicted)
+      DepNode(dep.depKey, dep.lines._1, dep.lines._2, dep.lines._3, arts, dep.typ, info, evicted = evicted)
     }
 
-    def calcDependencies0(srcDep: Dependency, dstDeps: List[Dependency]): List[GraphElement] = {
+    def calcDependencies0(srcDep: DepWrapper, dstDeps: List[Dependency]): List[GraphElement] = {
       //println(s"calc0: srcDep=$srcDep dstDeps: $dstDeps")
 
       def updateDependency(dep: Dependency): Dependency = {
@@ -189,10 +196,10 @@ class DependencyProcessor(moduleGraph: Seq[(ScalaModule,ScalaModule)],
 
       srcNode :: dstDeps.flatMap { dep =>
         val updDep = updateDependency(dep)
-        val updNode = toDepNode(updDep)
+        val updNode = toDepNode(GenericDependency(updDep))
 
         val evicted = dep != updDep
-        val depNode = toDepNode(dep, evicted)
+        val depNode = toDepNode(GenericDependency(dep), evicted)
 
         val elements = if (evicted && includeEvictions) {
           val depEdge = DepEdge(srcNode.key, depNode.key, eviction = false)
@@ -205,7 +212,7 @@ class DependencyProcessor(moduleGraph: Seq[(ScalaModule,ScalaModule)],
         }
 
         val subDeps = resolution.finalDependenciesCache.getOrElse(updDep, Nil).toList
-        srcNode :: elements ::: calcDependencies0(updDep, subDeps)
+        srcNode :: elements ::: calcDependencies0(GenericDependency(updDep), subDeps)
       }
     }
 
@@ -216,10 +223,10 @@ class DependencyProcessor(moduleGraph: Seq[(ScalaModule,ScalaModule)],
         deps.map(toDependency(_, scalaVersion, platformSuffix))
           .map(_.copy(configuration = "compile"))
           .toList
-      calcDependencies0(projectDep(module), compileDeps)
+      calcDependencies0(module, compileDeps)
     }
     val moduleEdges = moduleGraph.map{case(from,to) =>
-      DepEdge(depKey(projectDep(from)), depKey(projectDep(to)), eviction = false)
+      DepEdge(from.depKey, to.depKey, eviction = false)
     }
     val nodes = elements.collect { case n: DepNode => n }.toSeq.distinct.map(n => n.key -> n).toMap
     val edges = elements.collect { case e: DepEdge => e }.toSeq.distinct.sortBy(_.from)

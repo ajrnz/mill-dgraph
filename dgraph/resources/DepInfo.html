@@ -1,4 +1,4 @@
-<!doctype html>
+XXX<!doctype html>
 <html>
 <meta charset="utf-8">
 
@@ -138,8 +138,8 @@ function drawDepGraph(showEvicted) {
   g = new dagreD3.graphlib.Graph().setGraph({"rankdir": "LR"});
   for(var nodeId in deps.nodes) {
     var node = deps.nodes[nodeId]
-    var fill = (node.evicted ? "fill: gray;" : "fill: black;") + (node.isProject ? "font-weight: bold;" : "")
-    var lineStyle = node.evicted ? "stroke-dasharray: 5, 5;" : (node.isProject ? "stroke-width: 5px;" : "")    
+    var fill = (node.evicted ? "fill: gray;" : "fill: black;") + (node.nodeType == "dep" ? "" : "font-weight: bold;")
+    var lineStyle = (node.evicted || node.nodeType == "ref") ? "stroke-dasharray: 5, 5;" : (node.nodeType == "dep" ? "" : "stroke-width: 5px;")
     g.setNode(node.key, {label: nodeLabel(node), labelStyle: fill, style: lineStyle, rx: 5, ry: 5, description: "description: "+node.key})
   }
   deps.edges.forEach(function(edge){

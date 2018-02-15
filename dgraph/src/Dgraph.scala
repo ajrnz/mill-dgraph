@@ -24,27 +24,27 @@ object dgraph extends ExternalModule {
 
 
   def browseDeps(module: ScalaModule, overrideDeps: Dep*) = T{
-    def transitiveModuleDeps(start: ScalaModule, parent: ScalaModule): Seq[(ScalaModule, ScalaModule)] = {
-      (parent, start) +: start.moduleDeps.flatMap(mod => transitiveModuleDeps(mod, start))
+    def transitiveModuleDeps(start: ProjectDep, parent: ProjectDep): Seq[(ProjectDep, ProjectDep)] = {
+      (parent, start) +: start.module.moduleDeps.flatMap(mod => transitiveModuleDeps(ProjectDep(mod), start))
     }
 
     val isOverride = overrideDeps.nonEmpty
     val (moduleGraph, allModules) =
       if (isOverride) {
-        (Seq.empty[(ScalaModule, ScalaModule)], Seq.empty[ScalaModule])
+        (Seq.empty[(ProjectDep, ProjectDep)], Seq.empty[ProjectDep])
       }
       else {
-        val transitive = transitiveModuleDeps(module, module).distinct
+        val transitive = transitiveModuleDeps(ProjectDep(module), ProjectDep(module)).distinct
         val moduleGraph = transitive.tail
         val allModules = transitive.flatMap(x => Seq(x._1, x._2)).distinct
         (moduleGraph, allModules)
       }
     T.task {
-      val depMap: Map[ScalaModule, Agg[Dep]] =
+      val depMap: Map[DepWrapper, Agg[Dep]] =
         if (isOverride)
-          Map(module -> Agg.from(overrideDeps))
+          Map(RefProjectDep(module) -> Agg.from(overrideDeps))
         else
-          allModules.zip(Task.traverse(allModules)(_.ivyDeps)()).toMap
+          allModules.zip(Task.traverse(allModules)(_.module.ivyDeps)()).toMap
 
       val repos = module.repositories
       val scalaVersion = module.scalaVersion()
@@ -63,9 +63,9 @@ object dgraph extends ExternalModule {
 
       val outDir = pwd / 'out / 'plugins / 'dgraph
       mkdir(outDir)
-      val webSrc = home / 'dev / 'scripts / "mill-deps" / 'dgraph
-      for (file <- Seq("DepInfo.html", "DepInfo.css", "dagre-d3.js"))
-        cp.over(webSrc / file, outDir / file)
+      for (file <- Seq("DepInfo.html", "DepInfo.css", "dagre-d3.js")) {
+        write.over(outDir / file, read(resource / file))
+      }
 
       write.over(outDir / "DepData.js", s"var depData = $depDataJson")
       Utils.openInOS(outDir / "DepInfo.html")
