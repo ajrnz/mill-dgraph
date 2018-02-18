@@ -1,5 +1,3 @@
-import $ivy.`com.ajr::mill-dgraph:0.1`
-
 import mill._
 import mill.scalalib._, publish._
 import ammonite.ops._
@@ -43,13 +41,15 @@ object dgraph extends DgraphPublishModule {
 
   def resources = T.sources{ super.resources() :+ generatedResources() }
 
-  val millVersion = "0.0.7-41-4014f9"
-  
-  def ivyDeps = Agg(
-    ivy"com.lihaoyi::mill-scalalib:$millVersion",
+  val millVersion = "0.1.0"
 
+  def compileIvyDeps = Agg(
+    ivy"com.lihaoyi::mill-scalalib:$millVersion",
+    ivy"com.lihaoyi::geny:0.1.2"
+  )
+
+  def ivyDeps = Agg(
   	ivy"com.lihaoyi::scalatags:0.6.7",
-	  ivy"com.lihaoyi::geny:0.1.1"
   )
 
 }
