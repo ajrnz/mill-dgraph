@@ -7,7 +7,7 @@ import mill.modules.Jvm.createJar
 trait DgraphPublishModule extends PublishModule{
   def scalaVersion = "2.12.4"
   def artifactName = "mill-dgraph"
-  def publishVersion = "0.1"
+  def publishVersion = "0.1.0"
 
   def pomSettings = PomSettings(
     description = artifactName(),
@@ -47,7 +47,7 @@ object dgraph extends DgraphPublishModule {
 
   def resources = T.sources{ super.resources() :+ generatedResources() }
 
-  val millVersion = "0.1.0"
+  val millVersion = "0.1.1"
 
   def compileIvyDeps = Agg(
     ivy"com.lihaoyi::mill-scalalib:$millVersion",
