@@ -1,6 +1,8 @@
 import mill._
-import mill.scalalib._, publish._
+import mill.scalalib._
+import publish._
 import ammonite.ops._
+import mill.modules.Jvm.createJar
 
 trait DgraphPublishModule extends PublishModule{
   def scalaVersion = "2.12.4"
@@ -9,7 +11,7 @@ trait DgraphPublishModule extends PublishModule{
 
   def pomSettings = PomSettings(
     description = artifactName(),
-    organization = "com.ajr",
+    organization = "com.github.ajrnz",
     url = "https://github.com/ajrnz/mill-dgraph",
     licenses = Seq(
       License("MIT license", "http://www.opensource.org/licenses/mit-license.php")
@@ -31,8 +33,10 @@ object dgraph extends DgraphPublishModule {
   def d3 = T{ "https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js" }
 
   // disable docs generation
-  def docsJar() = T{
-    PathRef(T.ctx().dest)
+  def docJar() = T{
+    val javadocDir = T.ctx().dest / 'javadoc
+    mkdir(javadocDir)
+    createJar(Agg())(javadocDir)
   }
 
   def generatedResources = T{
