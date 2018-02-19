@@ -11,9 +11,6 @@ import mill.util.Loose.Agg
 import mill.scalalib.{ScalaModule,Dep}
 import ajr.util.Utils._
 
-
-
-
 object DependencyProcessor {
   val validType = Set("jar", "bundle", "src")
 
@@ -42,6 +39,7 @@ object DependencyProcessor {
     override def lines = (name, "(reference)", "")
   }
 
+  case class ModuleResolveContext(repos: Seq[Repository], scalaVersion: String, platformSuffix: String)
 
   def toDependency(dep: Dep, scalaVersion: String, platformSuffix: String): Dependency =
     dep match {
@@ -98,15 +96,15 @@ object Results {      implicit def rw: ReadWriter[Results] = macroRW }
 
 class DependencyProcessor(moduleGraph: Seq[(DepWrapper,DepWrapper)],
                           depMap: Map[DepWrapper,Agg[Dep]],
-                          repos: Seq[Repository], scalaVersion: String, platformSuffix: String)
+                          modResolveContext: ModuleResolveContext)
 {
   val allModules = moduleGraph.flatMap(x => Seq(x._1, x._2)).distinct
-  val allDependencies = depMap.values.flatten.map(toDependency(_, scalaVersion, platformSuffix)).toSet
+  val allDependencies = depMap.values.flatten.map(toDependency(_, modResolveContext.scalaVersion, modResolveContext.platformSuffix)).toSet
   //allDependencies.foreach(println)
 
   val allCompileDependencies = allDependencies.map(_.copy(configuration = "compile"))
   val start = Resolution(allCompileDependencies)
-  val fetch = Fetch.from(repos, Cache.fetch())
+  val fetch = Fetch.from(modResolveContext.repos, Cache.fetch())
   val resolution = start.process.run(fetch).unsafePerformSync
 
   def calculate(includeEvictions: Boolean): Results = {
@@ -220,7 +218,7 @@ class DependencyProcessor(moduleGraph: Seq[(DepWrapper,DepWrapper)],
     val initialDependencies = resolution.rootDependencies.toList.map(_.copy(configuration = "compile"))
     val elements = depMap.flatMap{case(module, deps) =>
       val compileDeps =
-        deps.map(toDependency(_, scalaVersion, platformSuffix))
+        deps.map(toDependency(_, modResolveContext.scalaVersion, modResolveContext.platformSuffix))
           .map(_.copy(configuration = "compile"))
           .toList
       calcDependencies0(module, compileDeps)
