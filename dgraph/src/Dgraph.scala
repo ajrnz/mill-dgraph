@@ -14,6 +14,7 @@ import mill.eval.Evaluator
 import upickle.default.{ReadWriter, macroRW}
 import mill.eval.Result
 
+import scala.collection.mutable
 import scala.util.Try
 
 object dgraph extends ExternalModule {
@@ -32,30 +33,20 @@ object dgraph extends ExternalModule {
     module +: module.millModuleDirectChildren.flatMap(transitiveModules)
   }
 
-  def browseEm(ev: Evaluator[Unit], moduleName: String, overrideDepNames: String*) = T.command{
-    overrideDepNames.foreach(println)
+  def browseDeps(ev: Evaluator[Unit],
+               moduleName: String,
+               overrideDepNames: String*): mill.define.Command[Unit] = T.command
+  {
     transitiveModules(ev.rootModule).find(_.name == moduleName) match {
       case None =>
         Result.Failure(s"- module '$moduleName' not found")
 
       case Some(module: ScalaModule) =>
-        val depVals =
-          overrideDepNames
-            .map(_.replaceFirst("^(ivy)?", "").replaceAll("[\"' ]", "").replace('%', ':'))
-            .map(d => Try{ scalalib.Dep.parse(d)}.toEither.left.map(_ => d))
-
-        val errs = depVals.collect{case Left(name) => name}
-        if (errs.isEmpty) {
-          val deps = depVals.collect{case Right(mod) => mod}
-          println(s"browseDeps: ${module.name}, deps=$deps")
-          val task = browseDeps(module, deps: _*)
-          val res = ev.evaluate(Strict.Agg(task))
-          println(res.failing) // XXX fix me - check and display errors
-//          println("results", res)
-          Result.Success()
-        }
-        else {
-          Result.Failure(s"Unable to parse module(s): ${errs.mkString(", ")}")
+        val task = browseDeps(module, overrideDepNames: _*)
+        val results = ev.evaluate(Strict.Agg(task))
+        taskErrorReport[Unit](results) match {
+          case Right(v)  => Result.Success()
+          case Left(msg) => Result.Failure(msg)
         }
 
       case Some(module) =>
@@ -63,6 +54,48 @@ object dgraph extends ExternalModule {
     }
   }
 
+  private def validateStringDependencies(depStrs: Seq[String]): Either[String, Seq[Dep]] = {
+    val depVals =
+      depStrs
+        .map(_.replaceFirst("^(ivy)?", "").replaceAll("[\"' ]", "").replace('%', ':'))
+        .map(d => Try{ scalalib.Dep.parse(d)}.toEither.left.map(_ => d))
+
+    val deps = depVals.collect{case Right(dep) => dep}
+    val errs = depVals.collect{case Left(name) => name}
+    if (errs.nonEmpty)
+      Left(s"Unable to parse: ${errs.mkString(",")}")
+    else
+      Right(deps)
+  }
+
+  def taskErrorReport[V](results: Evaluator.Results): Either[String, V] = {
+    results.values match{
+      case Seq(head: V) => Right(head)
+      case Nil =>
+        val msg = new mutable.StringBuilder()
+        msg.append(results.failing.keyCount + " targets failed\n")
+        for((k, vs) <- results.failing.items){
+          msg.append(k match{
+            case Left(t) => "Anonymous Task\n"
+            case Right(k) => k.segments.render + "\n"
+          })
+
+          for(v <- vs){
+            v match{
+              case Result.Failure(m, _) => msg.append(m + "\n")
+              case Result.Exception(t, outerStack) =>
+                msg.append(
+                  t.toString +
+                    t.getStackTrace.dropRight(outerStack.value.length).map("\n    " + _).mkString +
+                    "\n"
+                )
+
+            }
+          }
+        }
+        Left(msg.toString)
+    }
+  }
 
 
   private def transitiveModuleDeps(start: ProjectDep, parent: ProjectDep): Seq[(ProjectDep, ProjectDep)] = {
@@ -86,10 +119,15 @@ object dgraph extends ExternalModule {
   }
 
 
-  def browseDeps(module: ScalaModule, overrideDeps: Dep*) = T.task {
+  def browseDeps(module: ScalaModule, overrideDepStrs: String*) = T.task {
     // need to specify the class loader if being called via a command from the command line
+
+    val overrideDeps = validateStringDependencies(overrideDepStrs) match {
+      case Right(deps) => deps
+      case Left(msg) => throw new IllegalArgumentException(s"Invalid dependency format: $msg")
+    }
+
     val resourceRoot = resource(dgraph.getClass.getClassLoader)
-    println("browseDeps")
 
     val resolveContext = moduleResolveContext(module)()
 
@@ -116,7 +154,7 @@ object dgraph extends ExternalModule {
 
     val outDir = pwd / 'out / 'plugins / 'dgraph
     mkdir(outDir)
-    for (file <- Seq("DepInfo.html", "DepInfo.css", "dagre-d3.js")) {
+    for (file <- Seq("DepInfo.html", "DepInfo.css", "d3.js", "dagre-d3.js")) {
       write.over(outDir / file, read(resourceRoot / file))
     }
 
