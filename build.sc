@@ -27,7 +27,8 @@ trait DgraphPublishModule extends PublishModule{
 object dgraph extends DgraphPublishModule {
   def scalaVersion = "2.12.4"
 
-  val dagre_d3 = "https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.js"
+  def dagre_d3 = T{ "https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" }
+  def d3 = T{ "https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js" }
 
   // disable docs generation
   def docsJar() = T{
@@ -35,7 +36,8 @@ object dgraph extends DgraphPublishModule {
   }
 
   def generatedResources = T{
-    mill.modules.Util.download(dagre_d3, "dagre-d3.js")
+    mill.modules.Util.download(dagre_d3(), "dagre-d3.js")
+    mill.modules.Util.download(d3(), "d3.js")
     PathRef(T.ctx().dest)
   }
 
@@ -44,8 +46,8 @@ object dgraph extends DgraphPublishModule {
   val millVersion = "0.1.0"
 
   def compileIvyDeps = Agg(
-    ivy"com.lihaoyi::mill-scalalib:$millVersion",
-    ivy"com.lihaoyi::geny:0.1.2"
+    ivy"com.lihaoyi::mill-main:$millVersion",
+    ivy"com.lihaoyi::geny:0.1.2",
   )
 
   def ivyDeps = Agg(
