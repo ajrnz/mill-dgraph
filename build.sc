@@ -46,7 +46,7 @@ object dgraph extends DgraphPublishModule {
   val millVersion = "0.1.0"
 
   def compileIvyDeps = Agg(
-    ivy"com.lihaoyi::mill-main:$millVersion",
+    ivy"com.lihaoyi::mill-scalalib:$millVersion",
     ivy"com.lihaoyi::geny:0.1.2",
   )
 
