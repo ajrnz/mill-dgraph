@@ -1,5 +1,4 @@
 language: scala
-sudo: required
 dist: trusty
 
 scala:
@@ -8,24 +7,11 @@ scala:
 jdk:
   - oraclejdk8
 
-matrix:
-  include:
-  - stage: build
-    env: CI_SCRIPT=ci/test-sbt.sh
-  - stage: build
-    env: CI_SCRIPT=ci/test-sbt-built.sh
-  - stage: build
-    env: CI_SCRIPT=ci/test-mill-built.sh
-  - stage: build
-    env: CI_SCRIPT=ci/test-mill-release.sh
-  - stage: release
-    env: CI_SCRIPT="ci/on-master.py ci/release.sh"
-  - stage: release
-    env: CI_SCRIPT="ci/on-master.py ci/publish-docs.sh"
-
 script:
-  - git fetch --unshallow --tags
-  - "$CI_SCRIPT"
+  - curl -L -o mill https://github.com/lihaoyi/mill/releases/download/0.1.0/0.1.0
+  - chmod +x mill
+  - ./mill dgraph.jar
+
 cache:
   directories:
   - $HOME/.sbt/0.13/dependency
