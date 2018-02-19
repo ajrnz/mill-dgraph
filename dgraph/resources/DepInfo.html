@@ -153,14 +153,18 @@ function drawDepGraph(showEvicted) {
 
   var svgDiv = document.getElementById("svgDiv")
   var svg2 = document.querySelector("svg")
-  
+
   var width = svgDiv.offsetWidth
   var height = svgDiv.offsetHeight
   svg2.setAttribute('height', height)
-  
-  var scale = height / g.graph().height * 0.95
-  var xoff = (width-g.graph().width*scale)/2
-  svg.call(zoom.transform, d3.zoomIdentity.translate(xoff,20).scale(scale, scale));
+
+  var xscale = height / g.graph().height * 0.95
+  var yscale = width / g.graph().width * 0.95
+  var gwidth = g.graph().width
+  var gheight = g.graph().height
+  var scale = Math.min(xscale, yscale)
+
+  svg.call(zoom.transform, d3.zoomIdentity.translate(width/2, height/2).scale(scale,scale).translate(-gwidth/2, -gheight/2))
 
   var currentNodeInfo = ""
 
