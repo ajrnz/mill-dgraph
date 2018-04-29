@@ -8,7 +8,7 @@ import DependencyProcessor._
 import mill.scalalib.Lib.scalaBinaryVersion
 import scalatags.Text.all._
 import mill.util.Loose.Agg
-import mill.scalalib.{ScalaModule,Dep}
+import mill.scalalib.{Dep, JavaModule, ScalaModule}
 import ajr.util.Utils._
 
 object DependencyProcessor {
@@ -25,14 +25,14 @@ object DependencyProcessor {
     def lines = (dep.module.organization, dep.module.name, dep.version)
   }
 
-  case class ProjectDep(module: ScalaModule) extends DepWrapper {
+  case class ProjectDep(module: JavaModule) extends DepWrapper {
     def typ = "prj"
     override def depKey = name
     def name = module.toString // XXX .name
     def lines = (name, "", "")
   }
 
-  case class RefProjectDep(module: ScalaModule) extends DepWrapper {
+  case class RefProjectDep(module: JavaModule) extends DepWrapper {
     override def typ = "ref"
     override def depKey = name
     def name = module.toString // XXX .name
@@ -43,7 +43,7 @@ object DependencyProcessor {
 
   def toDependency(dep: Dep, scalaVersion: String, platformSuffix: String): Dependency =
     dep match {
-      case Dep.Java(dep, cross) =>
+      case Dep.Java(dep, cross, force) =>
         dep.copy(
           module = dep.module.copy(
             name =
@@ -51,7 +51,7 @@ object DependencyProcessor {
                 (if (!cross) "" else platformSuffix)
           )
         )
-      case Dep.Scala(dep, cross) =>
+      case Dep.Scala(dep, cross, force) =>
         dep.copy(
           module = dep.module.copy(
             name =
@@ -60,7 +60,7 @@ object DependencyProcessor {
                 "_" + scalaBinaryVersion(scalaVersion)
           )
         )
-      case Dep.Point(dep, cross) =>
+      case Dep.Point(dep, cross, force) =>
         dep.copy(
           module = dep.module.copy(
             name =

@@ -5,9 +5,8 @@ import ammonite.ops._
 import mill.modules.Jvm.createJar
 
 trait DgraphPublishModule extends PublishModule{
-  def scalaVersion = "2.12.4"
-  def artifactName = "mill-dgraph"
-  def publishVersion = "0.1.0"
+  def artifactName = T {"mill-dgraph"}
+  def publishVersion = "0.2.0-SNAPSHOT"
 
   def pomSettings = PomSettings(
     description = artifactName(),
@@ -26,14 +25,14 @@ trait DgraphPublishModule extends PublishModule{
   )
 }
 
-object dgraph extends DgraphPublishModule {
-  def scalaVersion = "2.12.4"
+object dgraph extends ScalaModule with DgraphPublishModule {
+  def scalaVersion = T {"2.12.4"}
 
   def dagre_d3 = T{ "https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" }
   def d3 = T{ "https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js" }
 
   // disable docs generation
-  def docJar() = T{
+  def docJar = T{
     val javadocDir = T.ctx().dest / 'javadoc
     mkdir(javadocDir)
     createJar(Agg())(javadocDir)
@@ -47,7 +46,7 @@ object dgraph extends DgraphPublishModule {
 
   def resources = T.sources{ super.resources() :+ generatedResources() }
 
-  val millVersion = "0.1.1"
+  val millVersion = "0.2.0"
 
   def compileIvyDeps = Agg(
     ivy"com.lihaoyi::mill-scalalib:$millVersion",
