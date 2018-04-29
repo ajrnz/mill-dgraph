@@ -27,7 +27,7 @@ mill releases.
 
 To use the plugin you need to add the following to your `build.sc` file.
 
-    import $ivy.`com.github.ajrnz::mill-dgraph:0.1.0`
+    import $ivy.`com.github.ajrnz::mill-dgraph:0.2.0`
 
     val dgraph = plugin.dgraph 
    
@@ -68,3 +68,9 @@ or
 * Currently only looks at runtime dependencies - could look at compile/test
 * Text based lists of dependencies / sizes
 * Suggestions welcome...
+
+## Changelog
+
+### 0.2.0
+
+- Update for mill 0.2.0 (thanks to @benjaminfrank)

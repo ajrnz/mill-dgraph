@@ -6,7 +6,7 @@ import mill.modules.Jvm.createJar
 
 trait DgraphPublishModule extends PublishModule{
   def artifactName = T {"mill-dgraph"}
-  def publishVersion = "0.2.0-SNAPSHOT"
+  def publishVersion = "0.2.0"
 
   def pomSettings = PomSettings(
     description = artifactName(),

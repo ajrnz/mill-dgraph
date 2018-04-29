@@ -8,7 +8,7 @@ jdk:
   - oraclejdk8
 
 script:
-  - curl -L -o mill https://github.com/lihaoyi/mill/releases/download/0.1.1/0.1.1
+  - curl -L -o mill https://github.com/lihaoyi/mill/releases/download/0.2.0/0.2.0
   - chmod +x mill
   - ./mill dgraph.jar
 
